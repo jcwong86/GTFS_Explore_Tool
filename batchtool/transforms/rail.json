@@ -1,2 +1,1 @@
 {"op":"retain","match":{"class":"Route","type":2}}
-{"op":"transform","class":"org.onebusaway.gtfs_transformer.updates.CalendarSimplicationStrategy"}
