@@ -6,7 +6,7 @@ from subprocess import call
 from re import compile
 from urllib2 import urlopen
 from xml.dom.minidom import parse
-from os.path import dirname
+from os.path import dirname, exists
 
 # http://stackoverflow.com/questions/595305
 here = dirname(argv[0])
@@ -22,21 +22,12 @@ for line in reader:
         print 'Invalid short name %s' % shortname
         continue
 
-    # get the rss
-    rss = parse(urlopen('http://www.gtfs-data-exchange.com/agency/%s/feed' % line[:-1]))
-    links = rss.getElementsByTagName('link')
+    if not exists(shortname + '.zip'):
+        gtfs = 'http://gtfs-data-exchange.com/agency/%s/latest.zip' % line[:-1]
+        call(['wget', gtfs, '-O', shortname + '.zip'])
+    else:
+        print "Using existing %s.zip" % shortname
 
-    gtfs = ''
-    for link in links:
-        if link.getAttribute('rel') == 'enclosure':
-            gtfs = link.getAttribute('href')
-            break
-
-    if gtfs == '':
-        print "no GTFS for agency %s" % shortname
-        continue
-
-    call(['wget', gtfs, '-O', shortname + '.zip'])
     call([here + '/import_gtfs_and_analyze.sh', shortname + '.zip', shortname])
 
     # Don't remove the GTFSs, they mat be useful later.
