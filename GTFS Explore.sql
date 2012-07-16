@@ -124,11 +124,12 @@ ORDER BY service_id;
 CREATE TABLE route_level_FLtrip_serv_span AS
 SELECT service_id, route_id,
 	min(starting_departure) AS first_departure_sec, 
-	max(starting_departure) AS last_departure_sec,
-	ROUND((max(starting_departure)-min(starting_departure))/3600.0,1) AS span_of_service_hrs
+	max(ending_arrival) AS last_departure_sec,
+	ROUND((max(ending_arrival)-min(starting_departure))/3600.0,1) AS span_of_service_hrs
 FROM (
 	SELECT service_id, trip_id, route_id, 
-		min(departure_time_seconds) AS starting_departure
+		min(departure_time_seconds) AS starting_departure,
+		max(arrival_time_seconds) AS ending_arrival
 	FROM gtfs_stop_times
 	JOIN (SELECT service_id, trip_id, route_id FROM gtfs_trips) a USING (trip_id)
 	JOIN gtfs_routes USING (route_id)
@@ -160,7 +161,7 @@ ORDER BY route_id, service_id;
 -- AVERAGE HEADWAY ON ROUTE
 -- This provides the average headway of a route based on the stop-route headway at the most popular stop of each route. It is arbitrarily chosen among multiple stops with the same number of arrivals per day.
 CREATE TABLE route_level_headway AS
-SELECT service_id, stop_id, route_id, direction_id, avghdwy AS route_avg_hdwy, stdev_hdwy AS route_stdev_hdwy, trips_per_day
+SELECT service_id, route_id, direction_id, avghdwy AS route_avg_hdwy, stdev_hdwy AS route_stdev_hdwy, trips_per_day
 FROM stop_level_avg_hdwy a
 RIGHT JOIN (
 	SELECT DISTINCT
@@ -176,8 +177,11 @@ RIGHT JOIN (
 	WINDOW w AS (PARTITION BY service_id, route_id, direction_id ORDER BY numTripsPerDay DESC)) b
 USING (service_id, route_id, direction_id, stop_id);
 
+
 -- AVERAGE DISTANCE BETWEEN STOPS
--- Slow (takes my machine about 10 min), but is doing the job. Most of the delay seems to be coming from the large joins and having to rewrite the geometries. It returns time since last stop as well but this is generally unnecessary.
+-- Note that this uses the st_line_locate function which requires use 
+-- of geometries which are using the google universal projection. Ideally it will use
+-- state planes or geographies which should be updated for the future.
 
 CREATE INDEX ON gtfs_stop_times(stop_id);
 CREATE INDEX ON gtfs_trips(trip_id);
@@ -226,7 +230,7 @@ CREATE TABLE route_level_dist_bw_stops AS
 SELECT route_id, service_id, direction_id, avg(meters_since_last_stop)*3.281 AS avg_dist_bw_stops_ft
 FROM stop_times_w_dist_duration
 GROUP BY service_id, route_id, direction_id;
-
+--need to do an outer join on this table b/c shapes may be missing and don't want to lose rows b/c of that.
 DROP TABLE temp3, stop_times_w_dist_duration;
 
 
@@ -299,11 +303,12 @@ FROM (
 ORDER BY service_id, route_id;
 
 
-CREATE VIEW route_level_report AS
+CREATE OR REPLACE VIEW route_level_report AS
 SELECT *
 FROM route_level_trips_per_day
-NATURAL JOIN route_level_hrs_of_service
-NATURAL JOIN route_level_FLtrip_serv_span
-NATURAL JOIN route_level_headway
-NATURAL JOIN route_level_speeds
+NATURAL LEFT OUTER JOIN route_level_hrs_of_service
+NATURAL LEFT OUTER JOIN route_level_FLtrip_serv_span
+NATURAL LEFT OUTER JOIN route_level_headway
+NATURAL LEFT OUTER JOIN route_level_speeds
 NATURAL JOIN (SELECT route_short_name, route_long_name, route_id FROM gtfs_routes) a;
+
