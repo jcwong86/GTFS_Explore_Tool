@@ -1,4 +1,4 @@
-﻿-- NUM ROUTES SERVED
+﻿-- NUMBER OF ROUTES SERVED
 -- Uses trip table to find those with service_id=1 which means M-F for SEPTA. Also uses direction_id to ensure only one direction is counted so that if trip x serves stop y in two directions, it’s only counted once. 
 CREATE TABLE stop_level_routes_served AS
 SELECT stop_id, service_id, direction_id, count(distinct route_id) as numRoutes
@@ -98,64 +98,64 @@ JOIN (SELECT route_short_name, route_long_name, route_id FROM gtfs_routes) b USI
 -- NUM TRIPS PER DAY
 -- Organized by service_id for day of week, route_id as primary and direction_id as secondary grouping/sorting, show the number of trips scheduled per day.
 CREATE TABLE route_level_trips_per_day AS
-SELECT service_id, route_short_name, count(trip_id) AS numTripsPerRoute_both_dir
+SELECT service_id, route_id, count(trip_id) AS numTripsPerRoute_both_dir
 FROM gtfs_trips JOIN gtfs_routes USING (route_id)
-GROUP BY service_id, route_short_name
-ORDER BY service_id, route_short_name;
+GROUP BY service_id, route_id
+ORDER BY service_id, route_id;
 
 -- HOURS OF SERVICE
 -- This provides the hours of the day in which this route operates at ANY stop. A route length of 90 min whose last trip starts at 8pm would show up as having service at 8pm and 9pm. This includes both directions.
 CREATE TABLE route_level_hrs_of_service AS
-SELECT service_id, route_short_name, count(distinct departure_time_seconds/3600) AS hours_of_service
+SELECT service_id, route_id, count(distinct departure_time_seconds/3600) AS hours_of_service
 FROM (SELECT stop_id, departure_time_seconds, trip_id	FROM gtfs_stop_times) a
 	LEFT JOIN (SELECT service_id, route_id, trip_id FROM gtfs_trips) b USING (trip_id)
 	LEFT JOIN gtfs_routes USING (route_id) 
-GROUP BY service_id, route_short_name
-ORDER BY service_id, route_short_name ASC;
+GROUP BY service_id, route_id
+ORDER BY service_id, route_id ASC;
 
 -- ROUTES SERVED BY SERVICE PLAN 
 -- NOTE: Not found in summaries.
-SELECT service_id, count(distinct route_short_name)
+SELECT service_id, count(distinct route_id)
 FROM gtfs_trips JOIN gtfs_routes USING (route_id)
 GROUP BY service_id
 ORDER BY service_id;
 
 -- FIRST/LAST TRIPS OF THE DAY AND SPAN OF SERVICE
 CREATE TABLE route_level_FLtrip_serv_span AS
-SELECT service_id, route_short_name,
+SELECT service_id, route_id,
 	min(starting_departure) AS first_departure_sec, 
 	max(starting_departure) AS last_departure_sec,
 	ROUND((max(starting_departure)-min(starting_departure))/3600.0,1) AS span_of_service_hrs
 FROM (
-	SELECT service_id, trip_id, route_short_name, 
+	SELECT service_id, trip_id, route_id, 
 		min(departure_time_seconds) AS starting_departure
 	FROM gtfs_stop_times
 	JOIN (SELECT service_id, trip_id, route_id FROM gtfs_trips) a USING (trip_id)
 	JOIN gtfs_routes USING (route_id)
-	GROUP BY service_id, trip_id, route_short_name) b
-GROUP BY service_id, route_short_name
-ORDER BY service_id, route_short_name;
+	GROUP BY service_id, trip_id, route_id) b
+GROUP BY service_id, route_id
+ORDER BY service_id, route_id;
 
 -- NUMBER OF STOPS PER ROUTE
 -- Reports number of stops for each trip and then creates a weighted average for all the trips that belong to a route to account for a higher number of similar runs
 CREATE TABLE route_level_num_stops_detail AS
-SELECT service_id, route_short_name, direction_id, stops_per_trip, COUNT(*) AS num_similar_runs
+SELECT service_id, route_id, direction_id, stops_per_trip, COUNT(*) AS num_similar_runs
 FROM(
-	SELECT service_id, route_short_name, direction_id, trip_id, count(stop_id) AS stops_per_trip 
+	SELECT service_id, route_id, direction_id, trip_id, count(stop_id) AS stops_per_trip 
 	FROM gtfs_trips 
 	JOIN (SELECT DISTINCT stop_id, trip_id FROM gtfs_stop_times) a USING (trip_id)
 	JOIN gtfs_routes USING (route_id)
-	GROUP BY service_id, route_short_name, direction_id,trip_id) b 
-GROUP BY service_id, route_short_name, direction_id,stops_per_trip
-ORDER BY service_id, route_short_name, direction_id;
+	GROUP BY service_id, route_id, direction_id,trip_id) b 
+GROUP BY service_id, route_id, direction_id,stops_per_trip
+ORDER BY service_id, route_id, direction_id;
 
 CREATE TABLE route_level_w_avg_stops AS
-SELECT service_id, route_short_name, round(sum(heavyAvg)/sum(num_similar_runs) ,1) AS w_avg_num_stops
+SELECT service_id, route_id, round(sum(heavyAvg)/sum(num_similar_runs) ,1) AS w_avg_num_stops
 FROM (
 	SELECT *, stops_per_trip*num_similar_runs AS heavyAvg 
 	FROM route_level_num_stops_detail) a
-GROUP BY service_id, route_short_name
-ORDER BY route_short_name, service_id;
+GROUP BY service_id, route_id
+ORDER BY route_id, service_id;
 
 -- AVERAGE HEADWAY ON ROUTE
 -- This provides the average headway of a route based on the stop-route headway at the most popular stop of each route. It is arbitrarily chosen among multiple stops with the same number of arrivals per day.
@@ -284,7 +284,7 @@ DROP TABLE temp1, temp2;
 CREATE TABLE route_level_speeds AS
 SELECT 	service_id, 
 	direction_id,
-	route_short_name, 
+	route_id, 
 	average_speed, 
 	average_length_mi
 FROM (
@@ -296,7 +296,7 @@ FROM (
 	FROM trip_speeds
 	GROUP BY service_id, route_id, direction_id) a
 	JOIN gtfs_routes USING (route_id)
-ORDER BY service_id, route_short_name;
+ORDER BY service_id, route_id;
 
 
 CREATE VIEW route_level_report AS
@@ -306,4 +306,4 @@ NATURAL JOIN route_level_hrs_of_service
 NATURAL JOIN route_level_FLtrip_serv_span
 NATURAL JOIN route_level_headway
 NATURAL JOIN route_level_speeds
-NATURAL JOIN (SELECT route_short_name, route_long_name, route_id FROM gtfs_routes)a ;
+NATURAL JOIN (SELECT route_short_name, route_long_name, route_id FROM gtfs_routes) a;
