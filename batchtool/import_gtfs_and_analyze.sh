@@ -9,8 +9,9 @@ DIR="$( cd "$( dirname "${BASH_SOURCE[0]}" )" && pwd )"
 # Configuration and paths
 PSQL=psql
 CREATEDB=createdb
+DROPDB=dropdb
 IMPORTER_SRC_DIR=${DIR}/importer/src
-TRANSFORMER="java -jar ${DIR}/lib/gtfs-transformer.jar"
+TRANSFORMER="java -Xmx2500m -jar ${DIR}/lib/gtfs-transformer.jar"
 TRANSFORMS_DIR=${DIR}/transforms
 POSTGIS_DIR=/usr/share/postgresql/9.1/contrib/postgis-1.5
 GTFSEXPLORE_DIR=${DIR}/..
@@ -19,25 +20,25 @@ TEMPLATE_DB=postgis_template
 # Modes. These should match file names in the transforms/ dir
 MODES="light_rail subway rail bus"
 
-# Command line arguments: should be import_gtfs_and_analyze.sh /path/to/gtfs.zip slug
+# Command line arguments: should be import_gtfs_and_analyze.sh /path/to/gtfs.zip shortname
 IN_GTFS=$1
-SLUG=$2
+SHORTNAME=$2
 
 # Time it, in seconds
 start=`date +%s`
 
 # Check and confirm empty directory
 # http://superuser.com/questions/352289
-if [ "$(ls -A)" ]; then
-    echo "Scratch directory $(pwd) is not empty!"
-    exit 1
-fi
+#if [ "$(ls -A)" ]; then
+#    echo "Scratch directory $(pwd) is not empty!"
+#    exit 1
+#fi
 
 # Make a directory for files to keep
 mkdir output
 
 for mode in $MODES; do
-    dbname="${SLUG}_${mode}"
+    dbname="${SHORTNAME}_${mode}"
 
     # First, split the GTFS by mode
     echo Transforming GTFS...
@@ -49,7 +50,7 @@ for mode in $MODES; do
 
     # If there is not a stop_times.txt, this agency does not support this mode
     if [ ! -e ${dbname}/stop_times.txt ]; then
-        echo "Agency ${SLUG} does not operate mode ${mode}"
+        echo "Agency ${SHORTNAME} does not operate mode ${mode}"
         continue
     fi
 
@@ -92,8 +93,11 @@ for mode in $MODES; do
         -c "\copy (SELECT * FROM stop_level_report) TO output/${dbname}_stop_level.csv WITH CSV HEADER"
     $PSQL -d $dbname \
         -c "\copy (SELECT * FROM stop_route_level_report) TO output/${dbname}_stop_route_level.csv WITH CSV HEADER"
+
+    # Since we created it, clean it up
+    $DROPDB $dbname
 done
 
 end=`date +%s`
 
-echo ${SLUG},`expr $end - $start` >> output/analysis_stats.csv
+echo ${SHORTNAME},`expr $end - $start` >> output/analysis_stats.csv
