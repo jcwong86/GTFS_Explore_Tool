@@ -1,0 +1,3 @@
+[submodule "batchtool/importer"]
+	path = batchtool/importer
+	url = https://github.com/cbick/gtfs_SQL_importer.git
