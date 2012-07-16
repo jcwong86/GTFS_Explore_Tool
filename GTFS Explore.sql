@@ -21,38 +21,6 @@ USING (trip_id)
 GROUP BY stop_id, b.service_id, b.direction_id
 ORDER BY service_id, stop_id, direction_id;
 
--- SPAN OF SERVICE
--- Returns the time in seconds of the first/last departure; note that the last departure may actually be an arrival if its a terminal stop. Hours of service is different. Some post-processing should be done on rows with early_departures=true because that means there’s a departure before 4:30 AM which is a rough indicator of some kind of late-night service.
-CREATE TABLE stop_level_span_of_service AS
-SELECT stop_id, service_id, direction_id, route_id, min(departure_time_seconds) AS first_departure,max(departure_time_seconds) AS last_departure, (max(departure_time_seconds) - min(departure_time_seconds))/ 3600 AS span_of_service_hrs, CASE WHEN min(departure_time_seconds) < 16200 THEN TRUE END AS early_departures 
-FROM gtfs_stop_times a
-JOIN (SELECT route_id, service_id, direction_id, trip_id
-	FROM gtfs_trips) c
-USING (trip_id)
-GROUP BY stop_id, service_id, route_id, direction_id
-ORDER BY service_id, stop_id, route_id, direction_id;
-
--- HOURS OF SERVICE
--- Counts the number of hours in which at least one bus arrival occurs. Provided at service, stop, route and direction breakdown level. 
-CREATE TABLE stop_level_hours_of_service AS
-SELECT service_id, 
-	stop_id, 
-	route_id, 
-	direction_id, 
-	count(distinct departure_time_seconds/3600) AS hours_of_service
-FROM (
-	SELECT stop_id, departure_time_seconds, trip_id
-	FROM gtfs_stop_times) a
-LEFT JOIN (
-	SELECT service_id, 
-		route_id, 
-		direction_id, 
-		trip_id 
-	FROM gtfs_trips) b 
-USING (trip_id)
-GROUP BY service_id, stop_id, route_id, direction_id
-ORDER BY service_id, stop_id, route_id ASC;
-
 
 -- AVG TIME BETWEEN ARRIVALS
 -- Provides average and stdev headways for a particular direction of a route at a stop at different service plans (M-D/Sa/Su etc. Note that headways less than 3 min are ignored per guidance in TCQSM as not being the equivalent of two separate arrivals. Those >90min are ignored as well as likely service breaks (no lit support).
@@ -78,16 +46,17 @@ JOIN gtfs_routes USING (route_id)
 ORDER BY service_id, stop_id, route_id, direction_id;
 
 --CREATE STOP LEVEL AND STOP/ROUTE LEVEL REPORTS
+--stop_level_report provides summary information for each stop at each service_id and direction_id. 
+--
 CREATE VIEW stop_level_Report AS
 SELECT * 
 FROM stop_level_routes_served 
 NATURAL JOIN stop_level_trips_per_day 
 JOIN (SELECT stop_name, stop_lat, stop_lon, stop_id FROM gtfs_stops) a USING (stop_id);
 
+
 CREATE VIEW stop_route_level_Report AS
 SELECT * 
-FROM stop_level_span_of_service 
-NATURAL JOIN stop_level_hours_of_service
 NATURAL JOIN stop_level_avg_hdwy
 JOIN (SELECT stop_name, stop_lat, stop_lon, stop_id FROM gtfs_stops) a USING (stop_id)
 JOIN (SELECT route_short_name, route_long_name, route_id FROM gtfs_routes) b USING (route_id);
@@ -113,19 +82,13 @@ FROM (SELECT stop_id, departure_time_seconds, trip_id	FROM gtfs_stop_times) a
 GROUP BY service_id, route_id
 ORDER BY service_id, route_id ASC;
 
--- ROUTES SERVED BY SERVICE PLAN 
--- NOTE: Not found in summaries.
-SELECT service_id, count(distinct route_id)
-FROM gtfs_trips JOIN gtfs_routes USING (route_id)
-GROUP BY service_id
-ORDER BY service_id;
 
 -- FIRST/LAST TRIPS OF THE DAY AND SPAN OF SERVICE
 CREATE TABLE route_level_FLtrip_serv_span AS
 SELECT service_id, route_id,
 	min(starting_departure) AS first_departure_sec, 
 	max(ending_arrival) AS last_departure_sec,
-	ROUND((max(ending_arrival)-min(starting_departure))/3600.0,1) AS span_of_service_hrs
+	ROUND((max(ending_arrival)-min(starting_departure))/3600.0) AS span_of_service_hrs
 FROM (
 	SELECT service_id, trip_id, route_id, 
 		min(departure_time_seconds) AS starting_departure,
@@ -151,11 +114,11 @@ GROUP BY service_id, route_id, direction_id,stops_per_trip
 ORDER BY service_id, route_id, direction_id;
 
 CREATE TABLE route_level_w_avg_stops AS
-SELECT service_id, route_id, round(sum(heavyAvg)/sum(num_similar_runs) ,1) AS w_avg_num_stops
+SELECT service_id, route_id, direction_id, round(sum(heavyAvg)/sum(num_similar_runs) ,1) AS w_avg_num_stops
 FROM (
 	SELECT *, stops_per_trip*num_similar_runs AS heavyAvg 
 	FROM route_level_num_stops_detail) a
-GROUP BY service_id, route_id
+GROUP BY service_id, route_id, direction_id
 ORDER BY route_id, service_id;
 
 -- AVERAGE HEADWAY ON ROUTE
@@ -190,13 +153,17 @@ CREATE INDEX ON gtfs_trips(shape_id);
 CREATE TABLE temp1 AS 
 SELECT 	b.stop_id, 
 	b.shape_id, 
-	round(CAST(b.percent_along_route*b.route_length_meters AS NUMERIC),1) as dist_along_route_m
+	round((b.percent_along_route*b.route_length_meters)::NUMERIC,1) as dist_along_route_m
 FROM (
 	SELECT a.stop_id, 
 		a.shape_id, 
 		ST_line_locate_point(route.the_geom, stop.the_geom) as percent_along_route,
 		ST_length(st_transform(route.the_geom,900913)) as route_length_meters
-	FROM 	(SELECT DISTINCT stop_id, shape_id FROM gtfs_stop_times  JOIN gtfs_trips USING (trip_id)) a, 
+	FROM (
+		SELECT DISTINCT stop_id, shape_id 
+		FROM gtfs_stop_times  
+		JOIN gtfs_trips 
+		USING (trip_id)) a, 
 		gtfs_shape_geoms route, 
 		gtfs_stops stop
 	WHERE stop.stop_id=a.stop_id AND route.shape_id=a.shape_id) b;
@@ -223,14 +190,14 @@ SELECT 	service_id, route_id, direction_id, trip_id, stop_sequence, stop_id,
 	departure_time_seconds - lag(arrival_time_seconds) OVER w AS sec_since_last_stop,
 	dist_along_route_m - lag(dist_along_route_m) OVER w AS meters_since_last_stop
 FROM temp3
-WINDOW w as (PARTITION BY service_id, route_id, direction_id, trip_id ORDER BY stop_sequence)
+WINDOW w as (PARTITION BY service_id, route_id, direction_id, trip_id 
+	ORDER BY stop_sequence)
 ORDER BY trip_id, service_id, stop_sequence, route_id, direction_id, stop_sequence;
 
 CREATE TABLE route_level_dist_bw_stops AS
 SELECT route_id, service_id, direction_id, avg(meters_since_last_stop)*3.281 AS avg_dist_bw_stops_ft
 FROM stop_times_w_dist_duration
 GROUP BY service_id, route_id, direction_id;
---need to do an outer join on this table b/c shapes may be missing and don't want to lose rows b/c of that.
 DROP TABLE temp3, stop_times_w_dist_duration;
 
 
@@ -282,7 +249,6 @@ FROM temp2;
 
 DROP TABLE temp1, temp2;
 
-
 -- ROUTE SPEED
 -- Separate summary table using average of all trips per route for a speed (on a specific service_id)
 CREATE TABLE route_level_speeds AS
@@ -310,5 +276,6 @@ NATURAL LEFT OUTER JOIN route_level_hrs_of_service
 NATURAL LEFT OUTER JOIN route_level_FLtrip_serv_span
 NATURAL LEFT OUTER JOIN route_level_headway
 NATURAL LEFT OUTER JOIN route_level_speeds
+NATURAL LEFT OUTER JOIN route_level_w_avg_stops
+NATURAL LEFT OUTER JOIN route_level_dist_bw_stops
 NATURAL JOIN (SELECT route_short_name, route_long_name, route_id FROM gtfs_routes) a;
-
