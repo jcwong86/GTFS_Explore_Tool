@@ -33,6 +33,9 @@ if [ "$(ls -A)" ]; then
     exit 1
 fi
 
+# Make a directory for files to keep
+mkdir output
+
 for mode in $MODES; do
     dbname="${SLUG}_${mode}"
 
@@ -79,14 +82,18 @@ for mode in $MODES; do
 
     echo Saving output...
     # the stats
-    $PSQL -d $dbname -c "\copy gtfs_feed_stats TO ${dbname}_feed_stats.csv WITH CSV HEADER"
+    $PSQL -d $dbname \
+        -c "\copy gtfs_feed_stats TO output/${dbname}_feed_stats.csv WITH CSV HEADER"
 
     # the analysis
-    $PSQL -d $dbname -c "\copy route_level_report TO ${dbname}_route_level.csv WITH CSV HEADER"
-    $PSQL -d $dbname -c "\copy stop_level_report TO ${dbname}_stop_level.csv WITH CSV HEADER"
-    $PSQL -d $dbname -c "\copy gtfs_feed_stats TO ${dbname}_stop_route_level.csv WITH CSV HEADER"
+    $PSQL -d $dbname \
+        -c "\copy (SELECT * FROM route_level_report) TO output/${dbname}_route_level.csv WITH CSV HEADER"
+    $PSQL -d $dbname \
+        -c "\copy (SELECT * FROM stop_level_report) TO output/${dbname}_stop_level.csv WITH CSV HEADER"
+    $PSQL -d $dbname \
+        -c "\copy (SELECT * FROM stop_route_level_report) TO output/${dbname}_stop_route_level.csv WITH CSV HEADER"
 done
 
 end=`date +%s`
 
-echo ${SLUG},`expr $end - $start` >> analysis_stats.csv
+echo ${SLUG},`expr $end - $start` >> output/analysis_stats.csv
