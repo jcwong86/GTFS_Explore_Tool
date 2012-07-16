@@ -1,7 +1,8 @@
-﻿DROP TABLE gtfs_feed_stats;
-CREATE TABLE gtfs_feed_stats (db_name varchar, table_name text, column_name text, active_field int);
+﻿
+CREATE TABLE gtfs_feed_stats (table_name text, column_name text, active_field int);
 
 INSERT INTO gtfs_feed_stats (table_name, column_name, active_field) VALUES 
+('DBNAME',(SELECT table_catalog FROM information_schema.columns LIMIT 1)::text,0),
 ('agency', 'agency_id', (SELECT COUNT(agency_id) FROM gtfs_agency)),
 ('agency', 'agency_name', (SELECT COUNT(agency_name) FROM gtfs_agency)),
 ('agency', 'agency_url', (SELECT COUNT(agency_url) FROM gtfs_agency)),
@@ -94,8 +95,3 @@ INSERT INTO gtfs_feed_stats (table_name, column_name, active_field) VALUES
 
 ;
 
-
-UPDATE gtfs_feed_stats 
-SET db_name=(SELECT table_catalog FROM information_schema.columns LIMIT 1);
-
-SELECT * FROM gtfs_feed_stats;
