@@ -57,7 +57,8 @@ JOIN (SELECT stop_name, stop_lat, stop_lon, stop_id FROM gtfs_stops) a USING (st
 
 CREATE VIEW stop_route_level_Report AS
 SELECT * 
-NATURAL JOIN stop_level_avg_hdwy
+FROM
+stop_level_avg_hdwy
 JOIN (SELECT stop_name, stop_lat, stop_lon, stop_id FROM gtfs_stops) a USING (stop_id)
 JOIN (SELECT route_short_name, route_long_name, route_id FROM gtfs_routes) b USING (route_id);
 
