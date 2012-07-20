@@ -1,17 +1,9 @@
-setwd("./James_Docs/gtfs_explore_local/output_feed_stats")
+#Set the path to the output files
+setwd("./James_Docs/gtfs_explore_local/feedstats")
 
-t((t(read.csv("bayarearapidtransit_bus_feed_stats.csv", header=TRUE,skip=2)))[3,])
-get
-
-dataFiles <- lapply(Sys.glob("*stats*.csv"), read.csv)
-df<-as.data.frame(dataFiles)
-df<-df[,-(seq(1,to=ncol(df),by=3))]
-df<-df[,-(seq(1,to=ncol(df),by=2))]
-df<-df[c(2:nrow(df)),]
-View(df)
-df<-t(df)
-
-colnames(df)<-c(
+#Create a vertical vector that will eventually be transposed
+names<-c(
+  'PseudoAgencyName',
   'agency_agency_id',
   'agency_agency_name',
   'agency_agency_url',
@@ -101,5 +93,33 @@ colnames(df)<-c(
   'feed_info_feed_start_date',
   'feed_info_feed_end_date',
   'feed_info_feed_version')
-write.csv(df,"_feed_stats_aggregated.csv")
-  
+
+feedstats=data.frame(colnames=names)
+
+filelist <- list.files(pattern="stats.csv") 
+
+#Walks through the file list and checks if its an empty table, if so it skips it.
+#If its valid, it loads the data, reads a column, then drops the data
+#It also replaces the first line of each column with the agency's pseudo_id
+
+rm <- c()
+
+for (x in filelist) {
+  if(file.info(x)$size==0){
+    print(paste("SKIPPED FOR EMPTY FILE:",x))
+    rm<-append(rm,x)
+  }
+  else if(length(t(read.csv(x,header=TRUE)))==0){
+    print(paste("SKIPPED FOR NO ROWS:",x))
+    rm<-append(rm,x)
+  }
+  else {
+    temp_df<-read.csv(x,header=TRUE)
+    feedstats<-cbind(feedstats,temp_df[,3])
+    names(feedstats)[length(feedstats)]<-temp_df[2,1]
+    feedstats[1,length(feedstats)]<-temp_df[1,2]
+    print(paste("LOADED ",x)) 
+  }
+}
+feedstats<-feedstats[2:90,]
+write.table(feedstats,file="_aggregated_feed_stats.csv",sep=",",col.names=TRUE, row.names=FALSE)
