@@ -1,5 +1,5 @@
 #Set the path to the output files
-setwd("./James_Docs/gtfs_explore_local/feedstats")
+setwd("./Downloads/feedstats_final 4/")
 
 #Create a vertical vector that will eventually be transposed
 names<-c(

@@ -14,14 +14,18 @@ for(x in filelist){
 
 
 headways<-data.frame("agency_avg_hdwy"=0)
+#percentiles<-data.frame("85th_Percentile_hdwy"=0)
+
 
 for(i in filelist){
   if(exists(i)) {
     serv_ids_lookup<-sqldf(paste("SELECT service_id FROM service_ids WHERE agency_filename='",i,"'",sep=""))
     if(nrow(serv_ids_lookup)>0){
       hdwy<-colMeans(sqldf(paste("SELECT avghdwy FROM ",i,"WHERE service_id IN 'serv_ids_lookup'")),na.rm=TRUE)
+      #percentile<-quantile(sqldf(paste("SELECT avghdwy FROM ",i,"WHERE service_id IN 'serv_ids_lookup'")),c(0.85),na.rm=TRUE)
       if(!is.na(hdwy)){
         headways<-rbind(headways,hdwy)
+        #percentiles<-rbind(percentile,percentiles)
         print(paste("-------Just added",i))
         if(hdwy<5) {print("HUH? Very short headway.")}
       }
@@ -41,5 +45,5 @@ headways<-headways[2:nrow(headways),1] #get rid of starter row
 headways<-headways[!is.na(headways)] #get rid of NaN values
 remove(i,j,x,hdwy,filename,filelist)
 
-write.csv(headways,"AllAgencies-Bus-avghdwys.csv")
+write.csv(headways,"../AllAgencies-Subway-avghdwys.csv")
 

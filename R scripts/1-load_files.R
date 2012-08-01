@@ -1,7 +1,9 @@
-setwd("/Users/openplans/Dropbox/OpenPlans/Research/GTFS Explore Paper/output/")
+setwd("/Users/openplans/James_Docs/gtfs_explore_local/output/")
 
 #Edit for whether bus, rail, subway or light_rail
-filelist <- list.files(pattern="bus_stop_route_level") 
+#Also edit line 23 for nchar
+filelist <- list.files(pattern="bus_stop_route_level")
+#filelist <- filelist[grepl("light_rail",filelist)]
 
 #Walks through the file list and checks if its an empty table, if so it skips it.
 #If its valid, it pulls it into a dataframe based on the name of the file less ".csv"
@@ -18,8 +20,8 @@ for (x in filelist) {
     rm<-append(rm,x)
   }
   else {
-    assign(substr(x,0,nchar(x)-25),read.csv(x,header=TRUE))
-    print(paste("LOADED ",x)) 
+    assign(substr(x,0,nchar(x)-25),read.csv(x,header=TRUE)) ## 25 for bus, 26 for rail, 32 for light rail
+    print(paste("-------LOADED ",x)) 
   }
 }
 #Remove the skipped files from the filelist

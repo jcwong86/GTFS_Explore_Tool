@@ -7,7 +7,7 @@
 
 
 #set path to calendars folder
-setwd("/Users/openplans/Dropbox/OpenPlans/Research/GTFS Explore Paper/output/calendars/")
+setwd("/Users/openplans/James_Docs/gtfs_explore_local/calendars/")
 
 
 #Load a SQL like language into R
